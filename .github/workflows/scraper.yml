@@ -1,0 +1,75 @@
+name: Claude AI Scraper — Daily Run
+
+on:
+  schedule:
+    - cron: '0 7 * * *'   # 07:00 UTC daily (03:00 EST)
+  workflow_dispatch:        # Manual trigger from GitHub UI
+    inputs:
+      urls:
+        description: 'Comma-separated URLs to scrape (overrides default)'
+        required: false
+      schema:
+        description: 'Schema type: lead | product | article | generic'
+        required: false
+        default: 'lead'
+      instruction:
+        description: 'Claude extraction instruction'
+        required: false
+        default: 'Extract all relevant items from this page.'
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright browsers
+        run: |
+          playwright install chromium --with-deps
+          crawl4ai-setup
+
+      - name: Run scraper
+        run: |
+          python main.py scrape \
+            ${INPUT_URLS:-"https://example.com"} \
+            --schema ${INPUT_SCHEMA:-lead} \
+            --instruction "${INPUT_INSTRUCTION:-Extract all relevant items from this page.}" \
+            --output output/results_${{ github.run_id }}.json
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          INPUT_URLS: ${{ github.event.inputs.urls }}
+          INPUT_SCHEMA: ${{ github.event.inputs.schema }}
+          INPUT_INSTRUCTION: ${{ github.event.inputs.instruction }}
+
+      - name: Upload results artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scraper-results-${{ github.run_id }}
+          path: output/
+          retention-days: 30
+
+      - name: Show cost summary
+        run: python main.py cost
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
