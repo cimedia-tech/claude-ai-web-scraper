@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     # Claude
     anthropic_api_key: str = Field(..., env="ANTHROPIC_API_KEY")
     claude_model: str = Field("claude-haiku-4-5", env="CLAUDE_MODEL")
-    max_tokens: int = Field(1024, env="MAX_TOKENS")
+    max_tokens: int = Field(4096, env="MAX_TOKENS")
 
     # Crawling
     max_pages_per_run: int = Field(50, env="MAX_PAGES_PER_RUN")

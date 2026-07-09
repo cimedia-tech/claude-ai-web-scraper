@@ -1,4 +1,8 @@
 import asyncio
+import sys
+import io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 import json
 import random
 from pathlib import Path
@@ -40,15 +44,8 @@ def _browser_config() -> BrowserConfig:
 
 
 def _crawl_config() -> CrawlerRunConfig:
-    """Crawl4AI run config — Fit Markdown output (50–80% token reduction)."""
-    content_filter = PruningContentFilter(
-        threshold=0.48,
-        threshold_type="fixed",
-        min_word_threshold=10,
-    )
-    md_generator = DefaultMarkdownGenerator(content_filter=content_filter)
+    """Crawl4AI run config — raw markdown output, let Claude handle extraction."""
     return CrawlerRunConfig(
-        markdown_generator=md_generator,
         excluded_tags=["script", "style", "nav", "footer", "header",
                        "aside", "form", "noscript", "iframe"],
         remove_overlay_elements=True,
@@ -98,7 +95,10 @@ class Scraper:
             return []
 
         # 3. Use Fit Markdown (already token-pruned by Crawl4AI)
-        content = result.fit_markdown or result.markdown or ""
+        content = (
+            (result.markdown.raw_markdown if result.markdown else None)
+            or ""
+        )
         if not content.strip():
             console.print(f"  [yellow]⚠ Empty content:[/] {url}")
             return []
@@ -141,7 +141,7 @@ class Scraper:
         # Enforce page limit
         urls = urls[:settings.max_pages_per_run]
 
-        console.print(f"\n[bold gold1]🕷  Claude AI Scraper[/] — {len(urls)} URLs | "
+        console.print(f"\n[bold gold1]** Claude AI Scraper **[/] -- {len(urls)} URLs | "
                       f"Model: [cyan]{settings.claude_model}[/]\n")
 
         with Progress(
@@ -163,7 +163,7 @@ class Scraper:
         out_path = self._save(output_file)
         total_cost = await self.cache.total_cost()
 
-        console.print(f"\n[bold green]✓ Done[/] — "
+        console.print(f"\n[bold green]Done![/] -- "
                       f"{len(self._results)} records extracted\n"
                       f"[dim]Output:[/] {out_path}\n"
                       f"[dim]Total API cost (session):[/] [yellow]${total_cost:.5f}[/]\n")
